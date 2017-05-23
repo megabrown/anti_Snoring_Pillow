@@ -1,0 +1,192 @@
+#include <iom128v.h>
+#include <macros.h>
+#include <math.h>
+void delay_ms(unsigned int ms);      // 밀리 단위 지연시간 함수
+void delay_u(unsigned int u);         // 마이크로 단위 지연시간 함수
+void write_data(char data);           // DR 레지스터를 통해 데이터 입력 함수
+void write_instruction(char i_data);    // IR 레지스터를 통해 명령 입력 함수
+void init_LCD(void);                  // LCD 초기화 함수
+void set_position(char data_position); // 표시할 데이터의 위치 지정 함수
+void LCD_pos(unsigned char col, unsigned char row); // 표시할 문자들의 행,열 지정
+void write_str(unsigned char *str);  // 입력받은 문자를 인식해서 표시하는 함수
+float voltage;
+unsigned int airIn, airOut, pump, turn, volt, DB, i, j;
+
+
+void ADC_init(void){
+	DDRF = 0x00;		// 포트F를 입력으로 사용
+	ADMUX = 0xC0;		// 2.56V, 데이터 우측 저장, 단극성 입력 ADC0 사용
+	ADCSRA = 0xE7;		// ADC 허가 및 변환 시작 후 반복수행, 128 분주비
+}
+
+void get_air(void){
+    for(i=0;i<500;i++){
+            airIn++;
+            PORTB = 0x01;
+            PORTA = 0xfe;
+    }
+    if(airIn >= 50000){
+            pump = 0;
+            turn = 1;
+            airIn = 0;
+        }
+    delay_ms(250);
+}
+
+void lose_air(void){
+    for(i=0;i<500;i++){
+            airOut++;
+            PORTB = 0x08;
+            PORTA = 0xfd;
+    }
+    if(airOut >= 50000){
+            pump = 0;
+            turn = 0;
+            airOut = 0;
+        }
+    delay_ms(250);
+}
+
+void get_sound(void){
+    if(volt>40 && volt<90){
+        j++;
+        if(j==200){
+            pump = 1;
+            j = 0;
+        }
+        delay_u(500);
+    }
+    else if(volt<40 || volt>90){
+        pump = 0;
+    }
+}
+
+void display(void){     // 센서 감지값 표시 함수
+        voltage = ((ADCH*256)+ADCL)*5*0.0009775;	// volt값
+		volt = (int)(voltage*100);
+		/*DB = (int)(20*(log10(voltage))*100);	// 소리값
+        if(volt<100){
+            DB = (-1)*DB;
+            LCD_pos(1,6);	// 1행 6열부터 데이터 표시
+            write_data('-');
+        }
+        else{
+            LCD_pos(1,6);	// 1행 6열부터 데이터 표시
+            write_data(' ');
+        }*/
+
+		LCD_pos(0,8);	// 0행 7열부터 데이터 표시
+        write_data(((int)(voltage)%10)+'0');	// volt 1의 자리
+        write_data(((int)(voltage*10)%10)+'0');	// volt 소수점 첫째자리
+        write_data(((int)(voltage*100)%10)+'0');	// volt 소수점 둘째자리
+        write_data(' ');
+        write_data('m');	// volt 단위 표시
+        write_data('V');	// volt 단위 표시
+        /*LCD_pos(1,7);	// 1행 7열부터 데이터 표시
+        write_data(((DB/1000)%10)+'0');	// 소리 10의 자리
+        write_data(((DB/100)%10)+'0');	// 소리 1의 자리
+        write_data('.');
+        write_data(((DB/10)%10)+'0');	// 소리 소수점 첫째자리
+        //write_data(((DB)%10)+'0');	// 소리 소수점 둘째자리
+        write_data(' ');
+        write_data('d');	// 소리 단위 표시
+        write_data('B');	// 소리 단위 표시*/
+        delay_u(50);
+}
+
+void main(void){
+    DDRA = 0xff;        // 포트A를 출력으로 사용
+    DDRB = 0xff;        // 포트B를 출력으로 사용
+	DDRC = 0xff;		// 포트C를 출력으로 사용
+	DDRG = 0xff;		// 포트G를 출력으로 사용
+	init_LCD();		// LCD 사용을 위한 초기화
+	ADC_init();		// ADC 사용을 위한 초기화
+	turn = 1;
+	pump = 0;
+	PORTA = 0xff;
+	PORTB = 0x00;
+	unsigned char str1[] = "Volt: "; // 첫 번째 행에 표시할 문자열
+	LCD_pos(0,0);		// 0행 0열부터 표시
+	write_str(str1);	// 문자열 표시
+	unsigned char str2[] = "Nois: "; // 두 번째 행에 표시할 문자열
+	LCD_pos(1,0);		// 1행 0열부터 표시
+	write_str(str2);	// 문자열 표시
+
+	while(1){
+        display();  // 센서 감지값 표시
+        get_sound();
+        if(pump == 1){
+            if(turn==0){
+                get_air();
+            }
+            if(turn == 1){
+                lose_air();
+            }
+        }
+        if(pump == 0){
+            PORTA = 0xff;
+            PORTB = 0x00;
+        }
+	}
+}
+
+void LCD_pos(unsigned char col, unsigned char row){ // 표시할 문자들의 행,열 지정
+    write_instruction(0x80 | (row+col*0x40));	// row = 문자의 행, col = 문자의 열
+}
+
+void write_str(unsigned char *str){  // 입력받은 문자열 출력
+    while(*str != 0){		// 입력받은 문자를 모두 출력하면 멈춘다
+        write_data(*str);		// 입력받은 문자를 맨 처음부터 1개씩 출력한다
+        str++;			// 문자열에서 한자리 뒤로 이동한다
+    }
+}
+
+void write_data(char data){     // DR 레지스터를 통해 데이터 입력
+    PORTG = 0x05;          // 화면을 오른쪽으로 Shift한다
+    delay_u(50);              // 명령 처리할 동안 딜레이
+    PORTC = data;        // PORTA -> PORTC로 수정 됨
+    delay_u(10);              // 명령 처리할 동안 딜레이
+    PORTG = 0x00;          // 화면에 커서와 문자를 표시하고 점멸한다
+    delay_u(50);              // 명령 처리할 동안 딜레이
+}
+
+void write_instruction(char i_data){ // IR 레지스터를 통해 명령 입력
+    PORTG = 0x04;          // 커서가 왼쪽으로 이동
+    delay_u(50);              // 명령 처리할 동안 딜레이
+    PORTC = i_data;        // PORTA -> PORTC로 수정됨
+    delay_u(50);              // 명령 처리할 동안 딜레이
+    PORTG = 0x00;          // 화면에 커서와 문자를 표시하고 점멸한다
+    delay_u(50);              // 명령 처리할 동안 딜레이
+}
+
+void init_LCD(void){           // LCD 초기화
+    delay_ms(10);
+    write_instruction(0x30);  // 8bit 인터페이스와 1줄에 걸쳐 출력하는 모드 설정
+    delay_ms(30);           // 명령 처리할 동안 딜레이
+    write_instruction(0x38);  // 8bit 인터페이스와 2줄에 걸쳐 출력하는 모드 설정
+    delay_ms(5);            // 명령 처리할 동안 딜레이
+    write_instruction(0x3c);  // 8bit 인터페이스와 2줄에 걸쳐 출력하는 모드 설정
+    delay_ms(5);            // 명령 처리할 동안 딜레이
+    write_instruction(0x08);  // 디스플레이 Off
+    delay_ms(5);            // 명령 처리할 동안 딜레이
+    write_instruction(0x01);  // 화면 클리어
+    delay_ms(10);           // 명령 처리할 동안 딜레이
+    write_instruction(0x06);  // 엔트리 모드 셋, 주소+1, 커서를 우측으로 이동
+    delay_ms(5);            // 명령 처리할 동안 딜레이
+    write_instruction(0x0c); // 디스플레이 On, 커서는 표시하지 않고 점멸 없음
+    delay_ms(15);
+}
+
+void delay_ms(unsigned int m){   // ms단위 시간 지연
+    unsigned int i, j;
+    for(i=0;i<m;i++){
+      for(j=0;j<2100;j++);
+    }
+}
+
+void delay_u(unsigned int u){     // u단위 시간 지연
+    unsigned int i, j;
+    for(i=0;i<u;i++){
+      for(j=0;j<2;j++);
+    }
+}

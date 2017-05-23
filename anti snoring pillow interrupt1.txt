@@ -1,0 +1,95 @@
+#include<iom128v.h>	// 헤더파일
+#include<macros.h>	// 매크로 헤더파일
+void delay_ms(unsigned int ms);      // 밀리 단위 지연시간 함수
+void delay_u(unsigned int u);         // 마이크로 단위 지연시간 함수
+void write_data(char data);           // DR 레지스터를 통해 데이터 입력 함수
+void write_instruction(char i_data);    // IR 레지스터를 통해 명령 입력 함수
+void init_LCD(void);                  // LCD 초기화 함수
+void set_position(char data_position); // 표시할 데이터의 위치 지정 함수
+void LCD_pos(unsigned char col, unsigned char row); // 표시할 문자들의 행,열 지정
+void write_str(unsigned char *str);  // 입력받은 문자를 인식해서 표시하는 함수
+#pragma interrupt_handler timer0_comp_isr:iv_TIM0_COMP	// 타이머 인터럽트 명령어
+#pragma interrupt_handler timer2_comp_isr:iv_TIM2_COMP	// 타이머 인터럽트 명령어
+	unsigned int counter1,run1,counter2, run2, pump;   // 인터럽트 상태 변수 선언
+
+void timer0_comp_isr(void){	// 인터럽트 명령어 함수(Compare Match)
+	if(pump == 1){
+		counter++;		// 타이머 카운트 증가
+		if(counter == 40000){	// 40000회(=2초) 세면
+        		if(run == 5){		// Duty Rate가 100%일 때
+             			run = 0;		// 0%로 초기화
+        		}
+		run++;		// Duty Rate 증가
+		switch(run){
+		case 1: PORTA = 0xfe;	// 1일 때 0%
+			break;
+		case 2:	PORTA = 0xfe;	// 2일 때 20%
+			break;
+		case 3: PORTA = 0xfe;	// 3일 때 40%
+			break;
+		case 4: PORTA = 0xfe;	// 4일 때 60%
+			break;
+		case 5: PORTA = 0xfe;	// 5일 때 80%
+			break;
+		}
+		counter = 0;		// 2초마다 초기화
+		}
+	}
+
+}
+
+void timer2_comp_isr(void){	// 인터럽트 명령어 함수(Compare Match)
+	if(pump == 2){
+		counter++;		// 타이머 카운트 증가
+		if(counter == 40000){	// 40000회(=2초) 세면
+        		if(run == 5){		// Duty Rate가 100%일 때
+             			run = 0;		// 0%로 초기화
+        		}
+		run++;		// Duty Rate 증가
+		switch(run){
+		case 1: PORTA = 0xfd;	// 1일 때 0%
+			break;
+		case 2:	PORTA = 0xfd;	// 2일 때 20%
+			break;
+		case 3: PORTA = 0xfd;	// 3일 때 40%
+			break;
+		case 4: PORTA = 0xfd;	// 4일 때 60%
+			break;
+		case 5: PORTA = 0xfd;	// 5일 때 80%
+			break;
+		}
+		counter = 0;		// 2초마다 초기화
+		}
+	}
+}
+
+void timer0_init(void){		// 타이머 동작을 위한 초기 설정 함수
+	TCCR2 = 0x1A; 		// OC2를 출력으로 사용, CTC모드 사용, 2MHz 클럭소스 사용
+	TIMSK = 0x80;		// Compare Match Interrupt Enable 사용
+	OCR2 = 99;		// 100에서 인터럽트 발생(100 => 0)
+}
+
+void timer2_init(void){		// 타이머 동작을 위한 초기 설정 함수
+	TCCR2 = 0x1A; 		// OC2를 출력으로 사용, CTC모드 사용, 2MHz 클럭소스 사용
+	TIMSK = 0x80;		// Compare Match Interrupt Enable 사용
+	OCR2 = 99;		// 100에서 인터럽트 발생(100 => 0)
+}
+
+void main(void){
+	DDRA = 0xff;	// B 포트를 출력으로 사용
+	DDRC = 0xff;    // C 포트를 출력으로 사용
+	DDRG = 0xff;    // G 포트를 출력으로 사용
+	SREG = 0x80;	// 전체 인터럽트 사용 허가
+	counter1 = 0;	// 타이머 카운트 변수 초기화
+	run1 = 0;	// Duty Rate 조절 변수 초기화
+	counter2 = 0;
+	run2 = 0;
+	pump = 0;
+	init_LCD();	// LCD 설정 초기화
+	timer0_init();	// 타이머0 동작을 위한 초기 설정
+	timer2_init();	// 타이머2 동작을 위한 초기 설정
+
+	while(1){	// 프로그램 동작
+		if(
+	{
+}
